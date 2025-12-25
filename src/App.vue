@@ -14,7 +14,7 @@
 
                   <!-- Warmup -->
                   <div class="col-12">
-                    <div class="form-check form-switch mb-3">
+                    <div class="form-check form-switch">
                       <input class="form-check-input" type="checkbox" id="warmupEnabled" v-model="warmupEnabled" />
                       <label class="form-check-label fw-bold" for="warmupEnabled">Include <span class="text-warning">Warmup</span></label>
                     </div>
@@ -220,7 +220,7 @@
 </template>
 
 <script lang="ts">
-  import { defineComponent, ref, computed, watch } from 'vue';
+  import { onUnmounted,onMounted, defineComponent, ref, computed, watch } from 'vue';
 
 export default defineComponent({
   name: 'IntervalRunningTimer',
@@ -250,6 +250,59 @@ export default defineComponent({
     const currentInterval = ref<number>(0); // 0 = warmup, 1..n = active intervals
     const timerId = ref<number | null>(null);
     const targetEndTime = ref<number>(0);
+
+    const wakeLock = ref<WakeLockSentinel | null>(null);
+    const isWakeLockSupported = ref<boolean>('wakeLock' in navigator);
+
+    async function requestWakeLock() {
+      if (!isWakeLockSupported.value) return;
+
+      try {
+        wakeLock.value = await navigator.wakeLock.request('screen');
+        console.log('Wake lock acquired');
+      } catch (err) {
+        console.error('Failed to acquire wake lock:', err);
+      }
+    }
+
+    async function releaseWakeLock() {
+      if (wakeLock.value) {
+        try {
+          await wakeLock.value.release();
+          wakeLock.value = null;
+          console.log('Wake lock released');
+        } catch (err) {
+          console.error('Failed to release wake lock:', err);
+        }
+      }
+    }
+
+    // ── Handle visibility change ───────────────────────────────────────────
+    async function handleVisibilityChange() {
+      if (document.visibilityState === 'visible' && isRunning.value && !isPaused.value) {
+        await requestWakeLock();
+      } else if (wakeLock.value) {
+        await releaseWakeLock();
+      }
+    }
+
+    // ── Watch isRunning to manage wake lock ────────────────────────────────
+    watch(isRunning, async (running) => {
+      if (running) {
+        await requestWakeLock();
+      } else {
+        await releaseWakeLock();
+      }
+    });
+
+    // ── Cleanup on unmount ─────────────────────────────────────────────────
+    onUnmounted(async () => {
+      await releaseWakeLock();
+      if (isWakeLockSupported.value) {
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
+      }
+      releaseWakeLock();
+    });
 
     // Computed distances in km
     const warmupDistKm = computed<number>(() =>
@@ -392,6 +445,13 @@ export default defineComponent({
       }
     });
 
+    onMounted(() => {
+      if (isWakeLockSupported.value) {
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+      }
+    });
+
+
     const intervalDisplay = computed(() => {
       if (currentPhase.value === 'warmup') return 'Warmup';
       if (currentPhase.value === 'rest') return `${currentInterval.value} / ${numIntervals.value}`;
@@ -428,14 +488,3 @@ export default defineComponent({
   },
 });
 </script>
-
-<style scoped>
-.card {
-  border-radius: 1rem;
-}
-
-.display-3 {
-  font-weight: 700;
-  letter-spacing: -1px;
-}
-</style>
