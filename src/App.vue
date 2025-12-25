@@ -186,9 +186,35 @@
               <div class="display-1 fw-bold text-info font-monospace">{{ formatTime(remainingSeconds) }}</div>
             </div>
 
-            <div class="mb-4">
-              <div class="fs-6 text-muted">Target Speed</div>
-              <div class="display-4 fw-bold"><span class="font-monospace">{{ currentSpeed }}</span> <small>km/h</small></div>
+
+
+
+            <div v-if="currentPhase === 'rest' && nextActiveSpeed !== null">
+              <div class="row">
+                <div class="col-6">
+                  <div class="mb-4">
+                    <div class="fs-6 text-muted">Target Speed</div>
+                    <div class="display-4 fw-bold"><span class="font-monospace">{{ currentSpeed }}</span> <small>km/h</small></div>
+                  </div>
+
+                </div>
+                <div class="col-6">
+
+                  <div class="fs-6 text-muted">
+                    {{ nextActiveSpeedLabel }}
+                  </div>
+                  <div class="display-4 fw-bold text-muted">
+                    <span class="font-monospace">{{ nextActiveSpeed }}</span> <small>km/h</small>
+                  </div>
+
+                </div>
+              </div> 
+            </div>
+            <div v-else="">
+              <div class="mb-4">
+                <div class="fs-6 text-muted">Target Speed</div>
+                <div class="display-4 fw-bold"><span class="font-monospace">{{ currentSpeed }}</span> <small>km/h</small></div>
+              </div>
             </div>
 
             <div class="mb-4">
@@ -199,19 +225,18 @@
             </div>
 
             <div class="mt-4">
-              <button
-                  v-if="isPaused"
-                  @click="resume"
-                  class="btn btn-primary btn-lg px-5 me-3"
-                  >
-                  Resume
+              <button v-if="isPaused" @click="resume" class="btn btn-primary btn-lg px-5 me-3">
+                Resume
               </button>
-                <button v-else @click="pause" class="btn btn-warning btn-lg px-5 me-3">
-                  Pause
-                </button>
-                <button @click="stopTimer" class="btn btn-outline-danger btn-lg px-5">
-                  Stop
-                </button>
+              <button v-else @click="pause" class="btn btn-warning btn-lg px-5 me-3">
+                Pause
+              </button>
+              <button @click="skipCurrentPhase" class="btn btn-outline-secondary btn-lg px-5 me-3" :disabled="isPaused">
+                Skip Phase
+              </button>
+              <button @click="stopTimer" class="btn btn-outline-danger btn-lg px-5">
+                Stop
+              </button>
             </div>
         </div>
       </div>
@@ -276,6 +301,27 @@ export default defineComponent({
         }
       }
     }
+
+    // Compute the next active speed during rest
+    const nextActiveSpeed = computed<number | null>(() => {
+      if (currentPhase.value !== 'rest') return null;
+
+      const nextIndex = currentInterval.value+1; // After this rest, interval increments to this
+      if (nextIndex > numIntervals.value) return null; // After final rest
+
+      return activeSpeeds.value[nextIndex - 1] || defaultActiveSpeed.value;
+    });
+
+    const nextActiveSpeedLabel = computed<string>(() => {
+      if (currentPhase.value !== 'rest') return '';
+
+      const nextIndex = currentInterval.value;
+      if (nextIndex > numIntervals.value) {
+        return 'Final Rest – Workout Ending';
+      }
+
+      return `Next Active (${nextIndex} / ${numIntervals.value})`;
+    });
 
     // ── Handle visibility change ───────────────────────────────────────────
     async function handleVisibilityChange() {
@@ -371,6 +417,20 @@ export default defineComponent({
       startTimer();
     };
 
+// ── Skip current phase manually ──
+    const skipCurrentPhase = () => {
+      if (!isRunning.value || isPaused.value) return;
+
+      // Immediately stop current timer
+      if (timerId.value) {
+        clearInterval(timerId.value);
+        timerId.value = null;
+      }
+
+      // Move to next phase
+      switchPhase();
+    };
+
     const stopTimer = () => {
       if (timerId.value) {
         clearInterval(timerId.value);
@@ -422,10 +482,10 @@ export default defineComponent({
         remainingSeconds.value = calculateTime(activeDistKm.value, currentSpeed.value);
       }
 
+      // Restart timer with new phase duration
       targetEndTime.value = performance.now() + remainingSeconds.value * 1000;
       startTimer();
     };
-
     const formatTime = (seconds: number): string => {
       const minutes = Math.floor(seconds / 60);
       const secs = seconds % 60;
@@ -466,6 +526,7 @@ export default defineComponent({
       activeDist,
       activeUnit,
       defaultActiveSpeed,
+      skipCurrentPhase,
       numIntervals,
       activeSpeeds,
       restDist,
@@ -474,6 +535,8 @@ export default defineComponent({
       isRunning,
       isPaused,
       currentPhase,
+      nextActiveSpeed,
+      nextActiveSpeedLabel,
       currentSpeed,
       remainingSeconds,
       currentInterval,
