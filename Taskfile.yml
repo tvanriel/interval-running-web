@@ -1,0 +1,12 @@
+version: '3'
+
+tasks:
+  build:
+    cmds:
+      - npm run build
+
+  deploy:
+    cmds:
+      - s3cmd put dist/index.html s3://public/interval-running/dist/index.html
+      - s3cmd put --content-type text/css dist/assets/*.css s3://public/interval-running/dist/assets/
+      - s3cmd put --content-type application/javascript dist/assets/*.js s3://public/interval-running/dist/assets/

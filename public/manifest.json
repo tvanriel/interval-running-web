@@ -1,0 +1,12 @@
+{
+  "name": "Interval Running Timer",
+  "short_name": "Run Timer",
+  "description": "A simple yet powerful interval running workout timer with warmup, active intervals, rest periods, and pyramid training support.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#272b30",
+  "theme_color": "#59a95b",
+  "orientation": "portrait-primary",
+  "scope": "/",
+  "categories": ["fitness", "sports", "health", "timer"]
+}
